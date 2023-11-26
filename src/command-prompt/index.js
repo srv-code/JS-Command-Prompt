@@ -56,7 +56,7 @@ class CommandPrompt {
         Below are the prompt help commands and their functions: ${this.promptCommandList}
         
         To terminate from this prompt press Ctrl+C / Ctrl+D.
-  ***********
+    ***********
   
         `,
 

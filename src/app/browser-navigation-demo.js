@@ -1,4 +1,3 @@
-const { Debugger } = require('../utils/debug');
 const { BrowserNavigator } = require('../browser-navigation');
 const { CommandPrompt } = require('../command-prompt');
 
