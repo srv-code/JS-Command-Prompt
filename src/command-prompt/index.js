@@ -1,13 +1,5 @@
-const { BrowserNavigator } = require('./browser-navigation');
-const { log, initLogger } = require('./debug');
-
-// initLogger();
-
-class UtilityError extends Error {
-  constructor(message) {
-    super(message);
-  }
-}
+const { Debugger } = require('../utils/debug');
+const { UtilityError } = require('./errors');
 
 class CommandPrompt {
   static errorCodes = {
@@ -80,7 +72,7 @@ Exiting command prompt...
   async prompt() {
     return new Promise((resolve, reject) => {
       try {
-        log('prompt', { lineReader: !!this.lineReader });
+        Debugger.log('prompt', { lineReader: !!this.lineReader });
 
         this.lineReader.question(`${this.PROMPT}  `, string => {
           resolve(string.trim().split(/\s/));
@@ -92,7 +84,7 @@ Exiting command prompt...
   }
 
   executePromptCommand(commands) {
-    log('executePromptCommand', { commands });
+    Debugger.log('executePromptCommand', { commands });
 
     return new Promise((resolve, reject) => {
       switch (commands[0]) {
@@ -118,11 +110,18 @@ Utility commands:${this.utilityCommandList}
     console.log(this.messages.EXIT_MESSAGE);
     try {
       this.lineReader.close();
-    } catch {}
+    } catch (e) {
+      if (Debugger.isEnabled()) this.printErrorStackTrace(e);
+    }
     process.exit(0);
   }
 
-  handleError(e) {
+  printErrorStackTrace(error) {
+    // console.trace();
+    console.error('\nFull error stack trace:\n', error.stack);
+  }
+
+  handleError(e, suppressPrintingStacktrace) {
     let message = '\n>>>>> Error: ';
     if (typeof e === 'string') message += e;
     else if (e instanceof UtilityError)
@@ -133,13 +132,19 @@ Utility commands:${this.utilityCommandList}
     message += ' <<<<<<\n';
 
     console.error(message);
+    if (Debugger.isEnabled() && !suppressPrintingStacktrace)
+      this.printErrorStackTrace(e);
   }
 
   /**
    * Main entry
    */
   async start(processor) {
+    // Debugger.log('CommandPrompt.start', JSON.stringify(processor));
+
     let initialized = true;
+    let printedErrorStackTrace = false;
+
     while (1) {
       if (initialized) {
         console.log(this.messages.WELCOME_MESSAGE);
@@ -148,7 +153,7 @@ Utility commands:${this.utilityCommandList}
 
       try {
         const inputs = await this.prompt();
-        log('start', { inputs });
+        Debugger.log('start', { inputs });
 
         if (!inputs || !inputs[0]) continue;
         else if (inputs[0].startsWith('/'))
@@ -157,6 +162,10 @@ Utility commands:${this.utilityCommandList}
           try {
             console.log(await processor(inputs, this.commands));
           } catch (e) {
+            if (Debugger.isEnabled()) {
+              this.printErrorStackTrace(e);
+              printedErrorStackTrace = true;
+            }
             if (e === CommandPrompt.errorCodes.INVALID_COMMAND) throw e;
             throw new UtilityError(e.message ?? e);
           }
@@ -164,117 +173,13 @@ Utility commands:${this.utilityCommandList}
 
         // else (response);
       } catch (e) {
-        this.handleError(e);
+        if (Debugger.isEnabled() && !printedErrorStackTrace)
+          this.printErrorStackTrace(e);
+        this.handleError(e, printedErrorStackTrace);
       }
+      printedErrorStackTrace = false;
     }
   }
 }
-
-const commandList = {
-  go: {
-    command: 'go',
-    description: 'Go to URL',
-    requiresValue: true,
-  },
-  canGoBackward: {
-    command: 'bk?',
-    description: 'Check if can go back in history',
-    requiresValue: false,
-  },
-  goBackward: {
-    command: 'bk',
-    description: 'Go back in history',
-    requiresValue: false,
-  },
-  canGoForward: {
-    command: 'fd?',
-    description: 'Check if can go forward in history',
-    requiresValue: false,
-  },
-  goForward: {
-    command: 'fd',
-    description: 'Go foward in history',
-    requiresValue: false,
-  },
-  home: {
-    command: 'hm',
-    description: 'Go to home',
-    requiresValue: false,
-  },
-  clear: {
-    command: 'cl',
-    description: 'Clear history',
-    requiresValue: false,
-  },
-  printFullHistory: {
-    command: 'pr',
-    description: 'Print full history',
-    requiresValue: false,
-  },
-  printCurrentPage: {
-    command: 'pc',
-    description: 'Print current page',
-    requiresValue: false,
-  },
-};
-
-log('');
-
-async function processBrowserNavigationCommands(inputs) {
-  log('processBrowserNavigationCommands', { inputs });
-
-  return new Promise((resolve, reject) => {
-    switch (inputs[0]) {
-      case commandList.go.command:
-        if (!inputs[1]) reject(CommandPrompt.errorCodes.NO_VALUE_PROVIDED);
-        inputs.shift();
-        resolve(browserNavigator.go(inputs));
-        break;
-
-      case commandList.goBackward.command:
-        resolve(browserNavigator.goBack());
-        break;
-
-      case commandList.goForward.command:
-        resolve(browserNavigator.goForward());
-        break;
-
-      case commandList.canGoBackward.command:
-        resolve(browserNavigator.canGoBack());
-        break;
-
-      case commandList.canGoForward.command:
-        resolve(browserNavigator.canGoForward());
-        break;
-
-      case commandList.clear.command:
-        resolve(browserNavigator.clear());
-        break;
-
-      case commandList.home.command:
-        resolve(browserNavigator.goHome());
-        break;
-
-      case commandList.printFullHistory.command:
-        let history = browserNavigator.getHistory().join(', ');
-        history += `\nCurrently pointing to item number ${
-          browserNavigator.getCurrentIndex() + 1
-        }, i.e. ${browserNavigator.getCurrent()}`;
-
-        resolve(history);
-        break;
-
-      case commandList.printCurrentPage.command:
-        resolve(browserNavigator.getCurrent());
-        break;
-
-      default:
-        reject(CommandPrompt.errorCodes.INVALID_COMMAND);
-    }
-  });
-}
-
-const browserNavigator = new BrowserNavigator();
-new CommandPrompt(commandList).start(processBrowserNavigationCommands);
 
 module.exports = { CommandPrompt };

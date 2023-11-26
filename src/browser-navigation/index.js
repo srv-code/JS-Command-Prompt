@@ -1,18 +1,5 @@
-class NavigationActions {
-  static FORWARD = 'FORWARD';
-  static BACKWARD = 'BACKWARD';
-}
-
-class IllegalNavigationAction extends Error {
-  constructor(message, action) {
-    super(message);
-    this.action = action;
-  }
-
-  toString() {
-    return `${this.message}: action=${this.action}`;
-  }
-}
+const { IllegalNavigationAction } = require('./errors');
+const { NavigationActions } = require('./types');
 
 class BrowserNavigator {
   constructor() {
